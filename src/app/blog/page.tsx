@@ -1,4 +1,4 @@
-import Navbar from '@/components/Navbar';
+
 
 export default function BlogListPage() {
   const articles = [
@@ -7,7 +7,7 @@ export default function BlogListPage() {
   ];
 
   return (
-    <main><Navbar />
+    <main>
       <div className="max-w-2xl mx-auto py-12 px-6">
         <h1 className="text-3xl font-bold mb-8 text-gray-800">Long Reads</h1>
         <div className="space-y-6">

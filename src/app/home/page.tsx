@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import Navbar from '@/components/Navbar';
+
 
 export default function HomePage() {
  const [entries, setEntries] = useState<any[]>([]);
@@ -17,7 +17,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <Navbar />
+      
       <div className="max-w-2xl mx-auto py-12 px-6">
         <h1 className="text-4xl font-serif font-bold mb-10 text-gray-900">Journal</h1>
         <div className="space-y-12">

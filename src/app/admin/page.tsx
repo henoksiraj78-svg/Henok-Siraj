@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
-import Navbar from '@/components/Navbar';
+
 
 export default function AdminPage() {
   const [isAuth, setIsAuth] = useState(false);
@@ -41,7 +41,7 @@ export default function AdminPage() {
   );
 
   return (
-    <main><Navbar />
+    <main>
       <div className="max-w-2xl mx-auto py-12 px-6">
         <h1 className="text-2xl font-bold mb-6">Write Today's Story</h1>
         <input placeholder="Title" value={title} onChange={(e)=>setTitle(e.target.value)} className="w-full text-xl font-bold p-2 border-b mb-4 outline-none" />
