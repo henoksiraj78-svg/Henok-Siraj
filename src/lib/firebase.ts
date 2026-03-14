@@ -1,6 +1,6 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore"; // Added this
-import { getStorage } from "firebase/storage";     // Added this
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC4RVTTK5HsKyMjXH8tVMSYSEOZbWsrCC0",
@@ -12,13 +12,14 @@ const firebaseConfig = {
   measurementId: "G-MXDVDLMFGE"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase (Checks if an app already exists to avoid errors)
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Export these so you can use them in your pages
-export const db = getFirestore(app);    // This fixes the red "db" error!
-export const storage = getStorage(app); // This allows you to upload photos
+// Export services
+export const db = getFirestore(app);
+export const storage = getStorage(app);
 
+export default app;
 
 
 

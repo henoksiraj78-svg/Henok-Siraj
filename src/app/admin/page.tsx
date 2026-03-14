@@ -1,61 +1,86 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
-
+import { useState, useEffect } from "react";
+import { db, storage } from "@/lib/firebase";
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export default function AdminPage() {
-  const [isAuth, setIsAuth] = useState(false);
-  const [pass, setPass] = useState('');
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [entries, setEntries] = useState([]);
+  const [posts, setPosts] = useState<any[]>([]);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const SECRET = "Asosa2026"; // Change this to your preferred password
-
-  const fetchEntries = async () => {
+  const fetchPosts = async () => {
     const q = query(collection(db, "journalEntries"), orderBy("date", "desc"));
-    const snap = await getDocs(q);
-    setEntries(snap.docs.map(d => ({ id: d.id, ...d.data() })) as any);
+    const querySnapshot = await getDocs(q);
+    setPosts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   };
 
-  useEffect(() => { if (isAuth) fetchEntries(); }, [isAuth]);
+  useEffect(() => { fetchPosts(); }, []);
 
   const handleSave = async () => {
-    if (!title || !content) return alert("Please fill everything!");
-    await addDoc(collection(db, "journalEntries"), {
-      title, content, mood: "😊", date: new Date().toISOString()
-    });
-    setTitle(''); setContent(''); fetchEntries();
-    alert("Memory Locked in the Cloud!");
+    if (!title || !content) return alert("Please fill title and content");
+    setLoading(true);
+    try {
+      let imageUrl = "";
+      if (imageFile) {
+        const fileRef = ref(storage, `journal/${Date.now()}_${imageFile.name}`);
+        await uploadBytes(fileRef, imageFile);
+        imageUrl = await getDownloadURL(fileRef);
+      }
+
+      const postData: any = { title, content, date: new Date().toISOString() };
+      if (imageUrl) postData.image = imageUrl;
+
+      if (editingId) {
+        await updateDoc(doc(db, "journalEntries", editingId), postData);
+        setEditingId(null);
+      } else {
+        await addDoc(collection(db, "journalEntries"), postData);
+      }
+
+      setTitle(""); setContent(""); setImageFile(null);
+      fetchPosts();
+      alert("Success!");
+    } catch (e) { console.error(e); }
+    setLoading(false);
   };
 
-  if (!isAuth) return (
-    <div className="h-screen flex items-center justify-center bg-gray-50">
-      <div className="p-8 bg-white shadow-xl rounded-2xl w-80 text-center">
-        <h2 className="font-bold mb-4">Admin Access</h2>
-        <input type="password" placeholder="Password" onChange={(e)=>setPass(e.target.value)} className="border p-2 w-full rounded mb-4" />
-        <button onClick={() => pass === SECRET ? setIsAuth(true) : alert("Wrong!")} className="bg-black text-white w-full py-2 rounded">Unlock</button>
-      </div>
-    </div>
-  );
+  const startEdit = (post: any) => {
+    setEditingId(post.id);
+    setTitle(post.title);
+    setContent(post.content);
+    window.scrollTo(0, 0);
+  };
 
   return (
-    <main>
-      <div className="max-w-2xl mx-auto py-12 px-6">
-        <h1 className="text-2xl font-bold mb-6">Write Today's Story</h1>
-        <input placeholder="Title" value={title} onChange={(e)=>setTitle(e.target.value)} className="w-full text-xl font-bold p-2 border-b mb-4 outline-none" />
-        <textarea placeholder="What happened today?" value={content} onChange={(e)=>setContent(e.target.value)} className="w-full h-40 p-2 outline-none mb-4" />
-        <button onClick={handleSave} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold">Publish</button>
+    <div className="max-w-4xl mx-auto p-6 font-sans">
+      <div className="bg-white border-2 border-black p-6 rounded-lg mb-10 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+        <h2 className="text-2xl font-bold mb-4">{editingId ? "Edit Post" : "New Journal Entry"}</h2>
+        <input className="w-full p-3 mb-3 border-2 border-black rounded" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} />
+        <input type="file" className="mb-4 block" onChange={e => setImageFile(e.target.files?.[0] || null)} />
+        <textarea className="w-full p-3 mb-4 border-2 border-black rounded h-40" placeholder="Write your content..." value={content} onChange={e => setContent(e.target.value)} />
+        <button onClick={handleSave} disabled={loading} className="bg-black text-white px-8 py-3 rounded font-bold hover:bg-gray-800 transition">
+          {loading ? "Processing..." : editingId ? "Update Post" : "Publish to Blog"}
+        </button>
+      </div>
 
-        <h2 className="text-xl font-bold mt-16 mb-4 text-red-600">Delete Entries</h2>
-        {entries.map((e: any) => (
-          <div key={e.id} className="flex justify-between border-b py-4 items-center">
-            <span>{e.title}</span>
-            <button onClick={async () => { await deleteDoc(doc(db, "journalEntries", e.id)); fetchEntries(); }} className="text-red-500">Delete</button>
+      <div className="space-y-4">
+        {posts.map(post => (
+          <div key={post.id} className="flex justify-between items-center p-4 border-2 border-black rounded shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div>
+              <p className="font-bold">{post.title}</p>
+              <p className="text-xs text-gray-500">{new Date(post.date).toDateString()}</p>
+            </div>
+            <div className="flex gap-4">
+              <button onClick={() => startEdit(post)} className="text-blue-600 font-bold hover:underline">Edit</button>
+              <button onClick={async () => { if(confirm("Delete?")) { await deleteDoc(doc(db, "journalEntries", post.id)); fetchPosts(); } }} className="text-red-600 font-bold hover:underline">Delete</button>
+            </div>
           </div>
         ))}
       </div>
-    </main>
+    </div>
   );
 }
