@@ -1,65 +1,72 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { 
-  collection, getDocs, query, orderBy, 
-  doc, updateDoc, increment 
-} from "firebase/firestore";
+import { collection, getDocs, query, orderBy, doc, updateDoc, increment } from "firebase/firestore";
 import ReactMarkdown from "react-markdown";
 
-// Component for each individual post
 function PostEntry({ post, onReaction }: { post: any, onReaction: Function }) {
   const [userChoice, setUserChoice] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. Check local storage for existing vote color
     const saved = localStorage.getItem(`voted_${post.id}`);
     if (saved) setUserChoice(saved);
 
-    // 2. Increment VIEW count once when post mounts
     const addView = async () => {
       try {
         const postRef = doc(db, "journalEntries", post.id);
         await updateDoc(postRef, { views: increment(1) });
-      } catch (e) { console.error("View error", e); }
+      } catch (e) { console.error(e); }
     };
     addView();
   }, [post.id]);
 
   return (
-    <article className="border-l-4 border-black pl-8 relative pb-12">
-      <div className="absolute -left-[10px] top-2 h-4 w-4 rounded-full bg-blue-600 border-4 border-white shadow-sm"></div>
-      
-      <div className="flex justify-between items-center mb-4">
-        <time className="text-xs font-mono text-gray-400 uppercase tracking-widest">
+    <article className="border-b-2 border-black pb-16 mb-16 last:border-0">
+      <div className="flex justify-between items-center mb-6">
+        <time className="text-sm font-mono font-bold text-gray-500 uppercase">
           {new Date(post.date).toDateString()}
         </time>
-        <div className="text-[10px] font-mono bg-gray-100 px-2 py-1 rounded text-gray-500">
+        <span className="text-xs bg-black text-white px-2 py-0.5 font-mono">
           👁️ {post.views || 0} VIEWS
-        </div>
+        </span>
       </div>
 
-      <h2 className="text-4xl font-black mb-8 leading-tight">{post.title}</h2>
+      <h2 className="text-5xl font-black mb-10 leading-[0.9] tracking-tighter uppercase italic">
+        {post.title}
+      </h2>
 
-      <div className="prose prose-lg prose-slate max-w-none mb-10 
-        prose-img:rounded-xl prose-img:border-2 prose-img:border-black 
-        prose-img:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-        <ReactMarkdown>{post.content}</ReactMarkdown>
+      {/* BEAUTIFUL WRAPPING CONTENT */}
+      <div className="prose prose-lg prose-slate max-w-none 
+        prose-p:text-justify prose-p:leading-relaxed prose-p:mb-6
+        prose-headings:text-black prose-headings:font-black">
+        <ReactMarkdown
+          components={{
+            // This logic makes images float and allows text to wrap around them
+            img: ({node, ...props}) => (
+              <img 
+                {...props} 
+                className="w-full md:w-1/2 md:float-right md:ml-8 mb-6 rounded-none border-4 border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-transform hover:-translate-x-1 hover:-translate-y-1" 
+              />
+            )
+          }}
+        >
+          {post.content}
+        </ReactMarkdown>
       </div>
       
-      <div className="flex gap-6">
+      <div className="flex gap-4 mt-8 clear-both">
         <button 
           onClick={() => { onReaction(post.id, 'likes'); setUserChoice('likes'); }}
-          className={`flex items-center gap-2 px-6 py-2 border-2 border-black font-bold transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1
-            ${userChoice === 'likes' ? 'bg-green-400' : 'bg-white hover:bg-gray-50'}`}
+          className={`flex items-center gap-2 px-6 py-2 border-2 border-black font-bold shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all
+            ${userChoice === 'likes' ? 'bg-green-400' : 'bg-white'}`}
         >
           👍 {post.likes || 0}
         </button>
 
         <button 
           onClick={() => { onReaction(post.id, 'dislikes'); setUserChoice('dislikes'); }}
-          className={`flex items-center gap-2 px-6 py-2 border-2 border-black font-bold transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1
-            ${userChoice === 'dislikes' ? 'bg-red-400' : 'bg-white hover:bg-gray-50'}`}
+          className={`flex items-center gap-2 px-6 py-2 border-2 border-black font-bold shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1 transition-all
+            ${userChoice === 'dislikes' ? 'bg-red-400' : 'bg-white'}`}
         >
           👎 {post.dislikes || 0}
         </button>
@@ -73,50 +80,36 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
 
   const fetchPosts = async () => {
-    try {
-      const q = query(collection(db, "journalEntries"), orderBy("date", "desc"));
-      const querySnapshot = await getDocs(q);
-      setPosts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    } catch (e) { console.error(e); }
+    const q = query(collection(db, "journalEntries"), orderBy("date", "desc"));
+    const querySnapshot = await getDocs(q);
+    setPosts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     setLoading(false);
   };
 
   useEffect(() => { fetchPosts(); }, []);
 
-  const handleReaction = async (postId: string, newType: 'likes' | 'dislikes') => {
-    const storageKey = `voted_${postId}`;
-    const previousType = localStorage.getItem(storageKey);
-
-    if (previousType === newType) return;
-
-    try {
-      const postRef = doc(db, "journalEntries", postId);
-      let updates: any = {};
-
-      if (!previousType) {
-        updates[newType] = increment(1);
-      } else {
-        updates[previousType] = increment(-1);
-        updates[newType] = increment(1);
-      }
-
-      await updateDoc(postRef, updates);
-      localStorage.setItem(storageKey, newType);
-      fetchPosts(); // Refresh data to show updated counts
-    } catch (e) { console.error(e); }
-  };
-
-  if (loading) return <div className="p-20 text-center font-mono animate-pulse">Initializing Journal...</div>;
+  if (loading) return <div className="p-20 text-center font-black text-2xl italic">LOADING...</div>;
 
   return (
-    <main className="max-w-4xl mx-auto py-20 px-6">
-      <header className="mb-24">
-        <h1 className="text-7xl font-black italic tracking-tighter border-b-8 border-black pb-4 inline-block">BLOG</h1>
+    <main className="max-w-5xl mx-auto py-20 px-8">
+      <header className="mb-24 border-b-8 border-black pb-4">
+        <h1 className="text-8xl font-black italic tracking-tighter">JOURNAL.</h1>
       </header>
 
-      <div className="space-y-32">
+      <div className="space-y-12">
         {posts.map((post) => (
-          <PostEntry key={post.id} post={post} onReaction={handleReaction} />
+          <PostEntry key={post.id} post={post} onReaction={async (id: string, type: string) => {
+            const storageKey = `voted_${id}`;
+            const prev = localStorage.getItem(storageKey);
+            if (prev === type) return;
+            const postRef = doc(db, "journalEntries", id);
+            let up: any = {};
+            if (!prev) { up[type] = increment(1); } 
+            else { up[prev] = increment(-1); up[type] = increment(1); }
+            await updateDoc(postRef, up);
+            localStorage.setItem(storageKey, type);
+            fetchPosts();
+          }} />
         ))}
       </div>
     </main>
