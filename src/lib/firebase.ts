@@ -15,9 +15,21 @@ const firebaseConfig = {
 // Initialize Firebase (Checks if an app already exists to avoid errors)
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Export services
+// Initialize Services
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+/** * NETWORK OPTIMIZATION FOR STABLE UPLOADS
+ * These settings help bypass "Retry Limit Exceeded" errors 
+ * on slower or high-latency connections.
+ */
+
+// How long to wait for a single request to respond (increased to 1 minute)
+storage.maxOperationRetryTime = 60000; 
+
+// Total time to keep retrying an upload if it fails (increased to 5 minutes)
+// This is critical for surviving "packet loss" on 3G/4G networks.
+storage.maxUploadRetryTime = 300000; 
 
 export default app;
 
