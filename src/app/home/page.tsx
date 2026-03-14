@@ -7,62 +7,61 @@ import {
 } from "firebase/firestore";
 import ReactMarkdown from "react-markdown";
 
-// Separate component for each Post to handle individual "View" logic
-function PostCard({ post, onReaction }: { post: any, onReaction: Function }) {
-  
+// Component for each individual post
+function PostEntry({ post, onReaction }: { post: any, onReaction: Function }) {
+  const [userChoice, setUserChoice] = useState<string | null>(null);
+
   useEffect(() => {
-    // Increment view count in Firestore when the post is loaded
-    const incrementView = async () => {
+    // 1. Check local storage for existing vote color
+    const saved = localStorage.getItem(`voted_${post.id}`);
+    if (saved) setUserChoice(saved);
+
+    // 2. Increment VIEW count once when post mounts
+    const addView = async () => {
       try {
         const postRef = doc(db, "journalEntries", post.id);
-        await updateDoc(postRef, {
-          views: increment(1)
-        });
-      } catch (e) {
-        console.error("View count error:", e);
-      }
+        await updateDoc(postRef, { views: increment(1) });
+      } catch (e) { console.error("View error", e); }
     };
-    incrementView();
+    addView();
   }, [post.id]);
 
   return (
-    <article className="border-l-4 border-gray-100 pl-8 relative">
-      <div className="absolute -left-[10px] top-2 h-4 w-4 rounded-full bg-blue-600 border-4 border-white"></div>
+    <article className="border-l-4 border-black pl-8 relative pb-12">
+      <div className="absolute -left-[10px] top-2 h-4 w-4 rounded-full bg-blue-600 border-4 border-white shadow-sm"></div>
       
-      <div className="flex justify-between items-start mb-2">
+      <div className="flex justify-between items-center mb-4">
         <time className="text-xs font-mono text-gray-400 uppercase tracking-widest">
           {new Date(post.date).toDateString()}
         </time>
-        {/* VIEW COUNT DISPLAY */}
-        <div className="flex items-center gap-1 text-gray-400 font-mono text-xs">
-          <span>👁️</span>
-          <span>{post.views || 0} views</span>
+        <div className="text-[10px] font-mono bg-gray-100 px-2 py-1 rounded text-gray-500">
+          👁️ {post.views || 0} VIEWS
         </div>
       </div>
 
-      <h2 className="text-4xl font-extrabold mb-8">{post.title}</h2>
+      <h2 className="text-4xl font-black mb-8 leading-tight">{post.title}</h2>
 
-      <div className="prose prose-lg prose-slate max-w-none 
-        prose-img:rounded-2xl prose-img:border-2 prose-img:border-black 
+      <div className="prose prose-lg prose-slate max-w-none mb-10 
+        prose-img:rounded-xl prose-img:border-2 prose-img:border-black 
         prose-img:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
         <ReactMarkdown>{post.content}</ReactMarkdown>
       </div>
       
-      <div className="mt-10 flex items-center gap-6">
+      <div className="flex gap-6">
         <button 
-          onClick={() => onReaction(post.id, 'likes')}
-          className="flex items-center gap-2 px-4 py-2 border-2 border-black rounded-lg hover:bg-green-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+          onClick={() => { onReaction(post.id, 'likes'); setUserChoice('likes'); }}
+          className={`flex items-center gap-2 px-6 py-2 border-2 border-black font-bold transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1
+            ${userChoice === 'likes' ? 'bg-green-400' : 'bg-white hover:bg-gray-50'}`}
         >
-          <span>👍</span>
-          <span className="font-bold">{post.likes || 0}</span>
+          👍 {post.likes || 0}
         </button>
 
         <button 
-          onClick={() => onReaction(post.id, 'dislikes')}
-          className="flex items-center gap-2 px-4 py-2 border-2 border-black rounded-lg hover:bg-red-50 transition shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+          onClick={() => { onReaction(post.id, 'dislikes'); setUserChoice('dislikes'); }}
+          className={`flex items-center gap-2 px-6 py-2 border-2 border-black font-bold transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1
+            ${userChoice === 'dislikes' ? 'bg-red-400' : 'bg-white hover:bg-gray-50'}`}
         >
-          <span>👎</span>
-          <span className="font-bold">{post.dislikes || 0}</span>
+          👎 {post.dislikes || 0}
         </button>
       </div>
     </article>
@@ -84,27 +83,40 @@ export default function HomePage() {
 
   useEffect(() => { fetchPosts(); }, []);
 
-  const handleReaction = async (postId: string, type: 'likes' | 'dislikes') => {
+  const handleReaction = async (postId: string, newType: 'likes' | 'dislikes') => {
+    const storageKey = `voted_${postId}`;
+    const previousType = localStorage.getItem(storageKey);
+
+    if (previousType === newType) return;
+
     try {
       const postRef = doc(db, "journalEntries", postId);
-      await updateDoc(postRef, { [type]: increment(1) });
-      setPosts(prev => prev.map(p => 
-        p.id === postId ? { ...p, [type]: (p[type] || 0) + 1 } : p
-      ));
+      let updates: any = {};
+
+      if (!previousType) {
+        updates[newType] = increment(1);
+      } else {
+        updates[previousType] = increment(-1);
+        updates[newType] = increment(1);
+      }
+
+      await updateDoc(postRef, updates);
+      localStorage.setItem(storageKey, newType);
+      fetchPosts(); // Refresh data to show updated counts
     } catch (e) { console.error(e); }
   };
 
-  if (loading) return <div className="p-20 text-center font-mono uppercase tracking-widest text-gray-400">Loading Journal...</div>;
+  if (loading) return <div className="p-20 text-center font-mono animate-pulse">Initializing Journal...</div>;
 
   return (
-    <main className="max-w-4xl mx-auto py-16 px-6">
-      <header className="mb-20 border-b-4 border-black pb-6">
-        <h1 className="text-6xl font-black italic tracking-tighter uppercase">Journal</h1>
+    <main className="max-w-4xl mx-auto py-20 px-6">
+      <header className="mb-24">
+        <h1 className="text-7xl font-black italic tracking-tighter border-b-8 border-black pb-4 inline-block">BLOG</h1>
       </header>
 
-      <div className="space-y-24">
+      <div className="space-y-32">
         {posts.map((post) => (
-          <PostCard key={post.id} post={post} onReaction={handleReaction} />
+          <PostEntry key={post.id} post={post} onReaction={handleReaction} />
         ))}
       </div>
     </main>
